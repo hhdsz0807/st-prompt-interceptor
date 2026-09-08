@@ -339,12 +339,15 @@ export function openPromptViewerModal(selectedSnapId = null, openWithMockDrawer 
         <div class="pi-modal-dialog">
             <!-- 顶部操作条 -->
             <div class="pi-modal-header">
-                <div class="pi-modal-title">
-                    <i class="fa-solid fa-satellite-dish"></i> 最终发往 AI 的完整提示词截获报文
-                    ${snap.isBlocked ? '<span class="pi-badge-blocked">🛑 已截留阻断 (AI 未收到)</span>' : '<span class="pi-badge-passed">已放行</span>'}
+                <div class="pi-modal-top-bar">
+                    <div class="pi-modal-title">
+                        <i class="fa-solid fa-satellite-dish"></i> <span>最终提示词截留透视</span>
+                        ${snap.isBlocked ? '<span class="pi-badge-blocked">🛑 已截留阻断</span>' : '<span class="pi-badge-passed">已放行</span>'}
+                    </div>
+                    <button class="pi-close-icon-btn pi-close-btn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 <div class="pi-modal-actions">
-                    <div style="display:flex; align-items:center; gap:6px; margin-right:4px;">
+                    <div class="pi-history-wrap">
                         <span style="font-size:0.82rem; color:#94a3b8;">快照:</span>
                         <select id="pi-history-selector" class="pi-select">${historyOptionsHtml}</select>
                     </div>
@@ -356,11 +359,10 @@ export function openPromptViewerModal(selectedSnapId = null, openWithMockDrawer 
 
                     ${snap.isBlocked && !snap.isEmptyPlaceholder ? `
                         <button class="menu_button pi-btn-action pi-btn-release" id="pi-release-send-btn" title="放行本次截留的消息，让 AI 开始生成">
-                            <i class="fa-solid fa-paper-plane"></i> 放行发送给 AI
+                            <i class="fa-solid fa-paper-plane"></i> 放行发送
                         </button>
                     ` : ''}
                     <button class="menu_button pi-btn-action" id="pi-copy-all-json" title="复制完整发包 Payload (JSON)"><i class="fa-solid fa-copy"></i> 复制 JSON</button>
-                    <button class="menu_button pi-btn-action pi-close-btn" title="关闭"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             </div>
 

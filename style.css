@@ -65,6 +65,11 @@
     gap: 12px;
     flex-shrink: 0;
 }
+.pi-modal-top-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
 .pi-modal-title {
     font-size: 1.12rem;
     font-weight: 700;
@@ -95,6 +100,13 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
+}
+.pi-history-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
 }
 .pi-btn-action {
     display: inline-flex;
@@ -108,6 +120,11 @@
     color: #e2e8f0 !important;
     border: 1px solid #334155 !important;
     transition: all 0.15s ease;
+    width: auto !important;
+    flex: 0 0 auto !important;
+    max-width: 100%;
+    white-space: nowrap;
+    box-sizing: border-box;
 }
 .pi-btn-action:hover {
     background: #334155 !important;
@@ -131,13 +148,25 @@
 .pi-btn-release:hover {
     background: linear-gradient(135deg, #047857, #059669) !important;
 }
-.pi-close-btn {
+.pi-close-icon-btn {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
+    flex: 0 0 32px !important;
+    padding: 0 !important;
+    border-radius: 6px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     background: rgba(239, 68, 68, 0.18) !important;
     color: #f87171 !important;
     border: 1px solid rgba(239, 68, 68, 0.4) !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease;
 }
-.pi-close-btn:hover {
-    background: rgba(239, 68, 68, 0.35) !important;
+.pi-close-icon-btn:hover {
+    background: rgba(239, 68, 68, 0.4) !important;
     color: #ffffff !important;
 }
 
@@ -493,29 +522,74 @@
 
     .pi-modal-header {
         padding: 8px 12px !important;
-        flex-wrap: wrap !important;
-        gap: 6px !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+    }
+
+    .pi-modal-top-bar {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
     }
 
     .pi-modal-title {
         font-size: 0.92rem !important;
-        width: 100% !important;
-        justify-content: space-between;
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        flex: 1 !important;
+        min-width: 0 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    .pi-close-icon-btn {
+        width: 30px !important;
+        height: 30px !important;
+        min-width: 30px !important;
+        max-width: 30px !important;
+        flex: 0 0 30px !important;
+        padding: 0 !important;
     }
 
     .pi-modal-actions {
         width: 100% !important;
         display: flex !important;
         flex-wrap: wrap !important;
-        justify-content: space-between !important;
-        gap: 4px !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        gap: 6px !important;
     }
 
-    .pi-modal-actions .pi-btn-action {
-        padding: 6px 10px !important;
+    /* 移动端所有操作按钮防拉长变形：严禁 flex: 1 1 auto，严格自适应内容宽度 */
+    .pi-modal-actions .pi-btn-action,
+    .pi-mock-footer .pi-btn-action,
+    .pi-content-tools .pi-btn-action,
+    .pi-btn-action {
+        padding: 5px 11px !important;
         font-size: 0.8rem !important;
-        flex: 1 1 auto;
-        justify-content: center;
+        flex: 0 0 auto !important;
+        width: auto !important;
+        max-width: 100% !important;
+        justify-content: center !important;
+        border-radius: 6px !important;
+        white-space: nowrap !important;
+    }
+
+    .pi-history-wrap {
+        display: flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        flex: 0 0 auto !important;
+    }
+
+    .pi-history-wrap .pi-select {
+        max-width: 140px !important;
+        font-size: 0.78rem !important;
+        padding: 3px 6px !important;
     }
 
     /* 移动端层级与正文选项卡切换条 */
