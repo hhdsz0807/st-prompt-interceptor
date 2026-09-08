@@ -1,8 +1,8 @@
-﻿# 🎯 最终提示词截留透视器 (SillyTavern Prompt Interceptor)
+# 🎯 最终提示词截留透视器 (SillyTavern Prompt Interceptor)
 
 <p align="center">
   <img src="https://img.shields.io/badge/SillyTavern-Extension-blueviolet?style=flat-square" alt="SillyTavern Extension">
-  <img src="https://img.shields.io/badge/Version-1.0.0-brightgreen?style=flat-square" alt="Version 1.0.0">
+  <img src="https://img.shields.io/badge/Version-1.1.0-brightgreen?style=flat-square" alt="Version 1.1.0">
   <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="MIT License">
   <img src="https://img.shields.io/badge/Author-hhdsz0807-orange?style=flat-square" alt="Author">
 </p>
@@ -12,6 +12,14 @@
 ---
 
 ## 🌟 核心特性 (Key Features)
+
+### 📱 0. 手机端/触屏极致适配 (Mobile & Touch Friendly) [v1.1.0 新增]
+- **全自由手势拖拽**：悬浮球支持多端触屏与鼠标手势拖拽，智能边缘吸附与视口防出界保护，位置自动记忆持久化（`localStorage`）。
+- **一键重置防遮挡**：设置面板内新增 **【🎯 悬浮球重置到屏幕安全位置】** 按钮，无论被软键盘或输入栏如何挤压，随时一键归位。
+- **魔棒扩展菜单直达**：无缝注入 SillyTavern 顶部 **魔棒扩展菜单 (`#extensionsMenu`)**，手机上关闭悬浮球也能随时打开。
+- **移动端自适应双视图**：手机窄屏下自动启用响应式布局，顶部提供 **【📜 提示词正文】** 与 **【📑 消息层级目录】** 选项卡切换，在目录中选中楼层后自动无缝切回正文阅读。
+- **零阻塞即时唤起**：未发包时点击悬浮球不再静默拦截，而是提供友好就绪指引与一键伪装注入入口。
+
 
 ### 🛑 1. 毫秒级硬拦截阻断 (Zero-Token Hard Interceptor)
 - **真·零 Token 消耗**：在点击发送消息到发往大模型的最后一瞬间，双重锁（API 拦截 + Fetch 网络层守卫）瞬间切断发包流程。
@@ -113,7 +121,8 @@ git clone https://github.com/hhdsz0807/st-prompt-interceptor.git
 | **开启发包截留阻断** | `开` | 勾选后发送消息会被截断，不发给 AI，零 Token 消耗并自动弹窗透视；关闭后变为纯透视放行模式。 |
 | **启用插件** | `开` | 控制插件总开关。 |
 | **控制台打印完整 Payload** | `开` | 在浏览器 F12 Console 展开输出完整的发包 JSON 报文。 |
-| **界面右下角显示浮动查看按钮** | `开` | 在聊天界面右下角提供便捷悬浮徽标，随时点击打开透视面板。 |
+| **在屏幕上显示常驻可拖拽悬浮球** | `开` | 在屏幕上提供高层级（999999）悬浮徽标，支持手势拖拽与实时拦截状态呼吸灯。 |
+| **🎯 悬浮球重置到屏幕安全位置** | 按钮 | 一键将悬浮球恢复到屏幕右上侧安全可视区域，防止被手机软键盘或底部输入框遮挡。 |
 
 ---
 

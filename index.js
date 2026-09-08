@@ -171,112 +171,111 @@ function installFetchGuard() {
 }
 
 /**
- * 核心事件拦截挂载
+ * 核心事件拦截挂载 (兼容现代与传统 SillyTavern 事件总线)
  */
 function registerPromptInterceptor() {
     const context = SillyTavern.getContext();
-    if (!context.eventSource || !context.event_types) {
-        console.warn(`[${MODULE_NAME}] 未检测到 eventSource 或 event_types，拦截器挂载延后`);
+    const eventTypes = context.eventTypes || context.event_types;
+    if (!context.eventSource || !eventTypes) {
+        console.warn(`[${MODULE_NAME}] 未检测到 eventSource 或 eventTypes，拦截器挂载延后 1 秒重试...`);
+        setTimeout(registerPromptInterceptor, 1000);
         return;
     }
 
     // 1. Chat Completion 提示词装配完成
-    if (context.event_types.CHAT_COMPLETION_PROMPT_READY) {
-        context.eventSource.on(context.event_types.CHAT_COMPLETION_PROMPT_READY, (eventData) => {
-            const settings = getSettings();
-            if (!settings.enabled) return;
+    const promptReadyType = eventTypes.CHAT_COMPLETION_PROMPT_READY || 'CHAT_COMPLETION_PROMPT_READY';
+    context.eventSource.on(promptReadyType, (eventData) => {
+        const settings = getSettings();
+        if (!settings.enabled) return;
 
-            if (eventData && eventData.dryRun) return;
+        if (eventData && eventData.dryRun) return;
 
-            if (eventData && Array.isArray(eventData.chat)) {
-                const snapshot = {
-                    id: 'snap_' + Date.now(),
-                    type: 'Chat Completion',
-                    timestamp: new Date().toLocaleTimeString(),
-                    fullTime: new Date().toLocaleString(),
-                    messages: JSON.parse(JSON.stringify(eventData.chat)),
-                    model: '待确定',
-                    fullPayload: null,
-                    isBlocked: false,
-                };
-                recordSnapshot(snapshot);
-            }
-        });
-    }
-
-    // 2. Chat Completion 即将发包网络层
-    if (context.event_types.CHAT_COMPLETION_SETTINGS_READY) {
-        context.eventSource.on(context.event_types.CHAT_COMPLETION_SETTINGS_READY, async (generateData) => {
-            const settings = getSettings();
-            if (!settings.enabled || !currentSnapshot) return;
-
-            currentSnapshot.model = generateData?.model || '未知模型';
-            currentSnapshot.temperature = generateData?.temperature;
-            currentSnapshot.max_tokens = generateData?.max_tokens;
-            currentSnapshot.stream = generateData?.stream;
-            currentSnapshot.fullPayload = JSON.parse(JSON.stringify(generateData || {}));
-
-            const willBlock = settings.blockSend && !bypassNextSend;
-            currentSnapshot.isBlocked = willBlock;
-
-            if (settings.logToConsole) {
-                console.groupCollapsed(`[${MODULE_NAME}] 🎯 【${willBlock ? '🛑 已截留阻断' : '发包透视'}】[${currentSnapshot.model}] (${currentSnapshot.messages?.length || 0} 条消息)`);
-                console.log('发包时间:', currentSnapshot.fullTime);
-                console.log('截留阻断状态:', willBlock ? '已拦截 (未发给 AI)' : '已放行');
-                console.log('完整请求 Payload:', currentSnapshot.fullPayload);
-                console.groupEnd();
-            }
-
-            updateStatusDisplay();
-
-            if (willBlock) {
-                if (typeof context.stopGeneration === 'function') {
-                    context.stopGeneration();
-                }
-
-                if (typeof toastr !== 'undefined') {
-                    toastr.warning('🛑【最终消息已被截留】已掐断发包，AI 无法收到此消息！', '提示词截留器', { timeOut: 5000 });
-                }
-
-                openPromptViewerModal();
-            }
-        });
-    }
-
-    // 3. Text Completion 兼容
-    if (context.event_types.TEXT_COMPLETION_SETTINGS_READY) {
-        context.eventSource.on(context.event_types.TEXT_COMPLETION_SETTINGS_READY, async (params) => {
-            const settings = getSettings();
-            if (!settings.enabled) return;
-
-            const willBlock = settings.blockSend && !bypassNextSend;
+        if (eventData && Array.isArray(eventData.chat)) {
             const snapshot = {
                 id: 'snap_' + Date.now(),
-                type: 'Text Completion',
+                type: 'Chat Completion',
                 timestamp: new Date().toLocaleTimeString(),
                 fullTime: new Date().toLocaleString(),
-                model: params?.model || 'Text Model',
-                rawString: params?.prompt || '',
-                fullPayload: JSON.parse(JSON.stringify(params || {})),
-                isBlocked: willBlock,
+                messages: JSON.parse(JSON.stringify(eventData.chat)),
+                model: '待确定',
+                fullPayload: null,
+                isBlocked: false,
             };
-
             recordSnapshot(snapshot);
-            updateStatusDisplay();
+        }
+    });
 
-            if (willBlock) {
-                if (typeof context.stopGeneration === 'function') {
-                    context.stopGeneration();
-                }
+    // 2. Chat Completion 即将发包网络层
+    const settingsReadyType = eventTypes.CHAT_COMPLETION_SETTINGS_READY || 'CHAT_COMPLETION_SETTINGS_READY';
+    context.eventSource.on(settingsReadyType, async (generateData) => {
+        const settings = getSettings();
+        if (!settings.enabled || !currentSnapshot) return;
 
-                if (typeof toastr !== 'undefined') {
-                    toastr.warning('🛑【最终消息已被截留】已掐断发包，AI 无法收到！', '提示词截留器', { timeOut: 5000 });
-                }
+        currentSnapshot.model = generateData?.model || '未知模型';
+        currentSnapshot.temperature = generateData?.temperature;
+        currentSnapshot.max_tokens = generateData?.max_tokens;
+        currentSnapshot.stream = generateData?.stream;
+        currentSnapshot.fullPayload = JSON.parse(JSON.stringify(generateData || {}));
 
-                openPromptViewerModal();
+        const willBlock = settings.blockSend && !bypassNextSend;
+        currentSnapshot.isBlocked = willBlock;
+
+        if (settings.logToConsole) {
+            console.groupCollapsed(`[${MODULE_NAME}] 🎯 【${willBlock ? '🛑 已截留阻断' : '发包透视'}】[${currentSnapshot.model}] (${currentSnapshot.messages?.length || 0} 条消息)`);
+            console.log('发包时间:', currentSnapshot.fullTime);
+            console.log('截留阻断状态:', willBlock ? '已拦截 (未发给 AI)' : '已放行');
+            console.log('完整请求 Payload:', currentSnapshot.fullPayload);
+            console.groupEnd();
+        }
+
+        updateStatusDisplay();
+
+        if (willBlock) {
+            if (typeof context.stopGeneration === 'function') {
+                context.stopGeneration();
             }
-        });
-    }
+
+            if (typeof toastr !== 'undefined') {
+                toastr.warning('🛑【最终消息已被截留】已掐断发包，AI 无法收到此消息！', '提示词截留器', { timeOut: 5000 });
+            }
+
+            openPromptViewerModal();
+        }
+    });
+
+    // 3. Text Completion 兼容
+    const textSettingsType = eventTypes.TEXT_COMPLETION_SETTINGS_READY || 'TEXT_COMPLETION_SETTINGS_READY';
+    context.eventSource.on(textSettingsType, async (params) => {
+        const settings = getSettings();
+        if (!settings.enabled) return;
+
+        const willBlock = settings.blockSend && !bypassNextSend;
+        const snapshot = {
+            id: 'snap_' + Date.now(),
+            type: 'Text Completion',
+            timestamp: new Date().toLocaleTimeString(),
+            fullTime: new Date().toLocaleString(),
+            model: params?.model || 'Text Model',
+            rawString: params?.prompt || '',
+            fullPayload: JSON.parse(JSON.stringify(params || {})),
+            isBlocked: willBlock,
+        };
+
+        recordSnapshot(snapshot);
+        updateStatusDisplay();
+
+        if (willBlock) {
+            if (typeof context.stopGeneration === 'function') {
+                context.stopGeneration();
+            }
+
+            if (typeof toastr !== 'undefined') {
+                toastr.warning('🛑【最终消息已被截留】已掐断发包，AI 无法收到！', '提示词截留器', { timeOut: 5000 });
+            }
+
+            openPromptViewerModal();
+        }
+    });
 }
 
 function recordSnapshot(snap) {
@@ -292,6 +291,7 @@ function recordSnapshot(snap) {
  * 弹出全量透视模态面板
  */
 export function openPromptViewerModal(selectedSnapId = null, openWithMockDrawer = false) {
+    const settings = getSettings();
     let snap = currentSnapshot;
     if (selectedSnapId) {
         const found = capturedHistory.find(item => item.id === selectedSnapId);
@@ -299,29 +299,20 @@ export function openPromptViewerModal(selectedSnapId = null, openWithMockDrawer 
     }
 
     if (!snap) {
-        // 如果没有快照但用户直接要求注入伪装回复，构造一个空快照
-        if (openWithMockDrawer) {
-            snap = {
-                id: 'snap_empty',
-                type: 'Manual',
-                timestamp: new Date().toLocaleTimeString(),
-                fullTime: new Date().toLocaleString(),
-                messages: [],
-                model: 'Manual',
-                fullPayload: null,
-                isBlocked: false,
-            };
-        } else {
-            if (typeof toastr !== 'undefined') {
-                toastr.info('尚未捕获到发给 AI 的提示词，请先在输入框发送一条消息测试。', '提示词截留器');
-            } else {
-                alert('尚未捕获到发给 AI 的提示词，请先在输入框发送一条消息测试。');
-            }
-            return;
-        }
+        // 如果尚无发包快照，构造友好占位快照，确保在移动端点击悬浮球随时能打开面板
+        snap = {
+            id: 'snap_empty',
+            type: '等待发包',
+            timestamp: new Date().toLocaleTimeString(),
+            fullTime: new Date().toLocaleString(),
+            messages: [],
+            model: '尚未发包',
+            fullPayload: null,
+            isBlocked: settings.blockSend,
+            isEmptyPlaceholder: true,
+        };
     }
 
-    const settings = getSettings();
     currentFontSize = settings.fontSize || 16;
     currentSelectedNav = 'all';
 
@@ -363,7 +354,7 @@ export function openPromptViewerModal(selectedSnapId = null, openWithMockDrawer 
                         <i class="fa-solid fa-masks-theater"></i> 伪装注入 AI 回复
                     </button>
 
-                    ${snap.isBlocked ? `
+                    ${snap.isBlocked && !snap.isEmptyPlaceholder ? `
                         <button class="menu_button pi-btn-action pi-btn-release" id="pi-release-send-btn" title="放行本次截留的消息，让 AI 开始生成">
                             <i class="fa-solid fa-paper-plane"></i> 放行发送给 AI
                         </button>
@@ -388,11 +379,17 @@ export function openPromptViewerModal(selectedSnapId = null, openWithMockDrawer 
                     <button class="menu_button pi-btn-action pi-btn-confirm-inject" id="pi-confirm-inject-btn"><i class="fa-solid fa-circle-check"></i> 确认伪装为 AI 回复并注入酒馆</button>
                 </div>
             </div>
+
+            <!-- 移动端选项卡切换 (窄屏响应式) -->
+            <div class="pi-mobile-tabs" id="pi-mobile-tabs">
+                <button class="pi-mobile-tab active" data-tab="content"><i class="fa-solid fa-file-lines"></i> 提示词正文</button>
+                <button class="pi-mobile-tab" data-tab="sidebar"><i class="fa-solid fa-list-ol"></i> 消息目录 (${isChat ? snap.messages.length : 1})</button>
+            </div>
             
             <!-- 核心主区域：左侧导航 + 右侧大滚动区 -->
             <div class="pi-modal-main">
                 <!-- 左侧导航 -->
-                <div class="pi-sidebar">
+                <div class="pi-sidebar" id="pi-sidebar">
                     <div class="pi-sidebar-header">
                         <span>消息层级列表 (${isChat ? snap.messages.length : 1})</span>
                         <span style="font-size:0.75rem; color:#64748b;">${totalChars.toLocaleString()} 字</span>
@@ -403,7 +400,7 @@ export function openPromptViewerModal(selectedSnapId = null, openWithMockDrawer 
                 </div>
 
                 <!-- 右侧内容阅读展示区 -->
-                <div class="pi-content-pane">
+                <div class="pi-content-pane is-mobile-active" id="pi-content-pane">
                     <div class="pi-content-header">
                         <div class="pi-content-title-box" id="pi-current-title-box">
                             <!-- 动态标题与字数 -->
@@ -444,6 +441,24 @@ export function openPromptViewerModal(selectedSnapId = null, openWithMockDrawer 
     modal.querySelector('.pi-close-btn').onclick = () => modal.classList.remove('pi-open');
     modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('pi-open'); };
 
+    // 移动端 Tab 选项卡切换
+    modal.querySelectorAll('.pi-mobile-tab').forEach(tabBtn => {
+        tabBtn.onclick = () => {
+            const tab = tabBtn.getAttribute('data-tab');
+            modal.querySelectorAll('.pi-mobile-tab').forEach(b => b.classList.remove('active'));
+            tabBtn.classList.add('active');
+            const sidebar = modal.querySelector('#pi-sidebar');
+            const contentPane = modal.querySelector('#pi-content-pane');
+            if (tab === 'sidebar') {
+                sidebar?.classList.add('is-mobile-active');
+                contentPane?.classList.remove('is-mobile-active');
+            } else {
+                contentPane?.classList.add('is-mobile-active');
+                sidebar?.classList.remove('is-mobile-active');
+            }
+        };
+    });
+
     // 伪装抽屉展开/折叠
     const mockDrawer = modal.querySelector('#pi-mock-drawer');
     const toggleMockBtn = modal.querySelector('#pi-toggle-mock-drawer-btn');
@@ -475,7 +490,7 @@ export function openPromptViewerModal(selectedSnapId = null, openWithMockDrawer 
                     if (typeof toastr !== 'undefined') toastr.info('已从剪贴板粘贴文本！');
                 }
             } catch (err) {
-                if (typeof toastr !== 'undefined') toastr.warning('无法自动读取剪贴板，请手动 Ctrl+V 粘贴。');
+                if (typeof toastr !== 'undefined') toastr.warning('无法自动读取剪贴板，请手动粘贴。');
             }
         };
     }
@@ -563,6 +578,18 @@ export function openPromptViewerModal(selectedSnapId = null, openWithMockDrawer 
  * 渲染左侧楼层导航列表
  */
 function renderSidebarNav(snap, isChat) {
+    if (snap.isEmptyPlaceholder) {
+        return `
+            <div class="pi-nav-item active" data-nav="all">
+                <div class="pi-nav-top">
+                    <span class="pi-nav-title"><i class="fa-solid fa-clock"></i> 等待发包</span>
+                    <span class="pi-nav-badge pi-badge-all">READY</span>
+                </div>
+                <div class="pi-nav-sub">尚未捕获提示词</div>
+            </div>
+        `;
+    }
+
     if (!isChat) {
         return `
             <div class="pi-nav-item active" data-nav="all">
@@ -650,6 +677,12 @@ function bindNavEvents(modal, snap, isChat) {
 
             const scrollBox = modal.querySelector('#pi-main-scroll-box');
             if (scrollBox) scrollBox.scrollTop = 0;
+
+            // 移动端在目录选择楼层后，自动切换回正文 Tab 供用户直接阅读
+            const contentTab = modal.querySelector('.pi-mobile-tab[data-tab="content"]');
+            if (contentTab) {
+                contentTab.click();
+            }
         };
     });
 }
@@ -662,6 +695,46 @@ function updateReadingView(modal, snap, isChat) {
     const contentBox = modal.querySelector('#pi-reading-content');
     const copyBtn = modal.querySelector('#pi-copy-current-view-btn');
     if (!titleBox || !contentBox) return;
+
+    // 尚未发包时的空状态友好指引
+    if (snap.isEmptyPlaceholder) {
+        titleBox.innerHTML = `<span>⏳ 提示词截留透视器已就绪</span><span class="pi-content-stats">等待发包截留</span>`;
+        contentBox.innerHTML = `
+            <div style="text-align:center; padding: 42px 16px; color:#94a3b8;">
+                <i class="fa-solid fa-satellite-dish" style="font-size:3.2rem; color:#38bdf8; margin-bottom:18px; display:inline-block;"></i>
+                <h3 style="color:#f8fafc; font-size:1.15rem; margin-bottom:12px;">尚未捕获到发往 AI 的提示词报文</h3>
+                <p style="font-size:0.92rem; line-height:1.75; max-width:540px; margin:0 auto 24px auto; color:#cbd5e1;">
+                    截留透视功能工作正常！当前您尚未在酒馆输入框发送消息。<br>
+                    当您在聊天输入框点击发送时，若已开启<strong>【发包截留阻断】</strong>，插件将在发包前一瞬间切断网络请求，AI 无法收到任何消息（真·零 Token 消耗），并自动将拼接完整的全量提示词在此呈现。
+                </p>
+                <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
+                    <button class="menu_button pi-btn-action pi-btn-mock" id="pi-empty-open-mock-btn" style="padding:10px 18px; font-size:0.92rem;">
+                        <i class="fa-solid fa-masks-theater"></i> 打开伪装注入 AI 最新回复
+                    </button>
+                    <button class="menu_button pi-btn-action" id="pi-empty-close-btn" style="padding:10px 18px; font-size:0.92rem;">
+                        <i class="fa-solid fa-arrow-left"></i> 返回对话界面测试发包
+                    </button>
+                </div>
+            </div>
+        `;
+        const openMockFromEmpty = contentBox.querySelector('#pi-empty-open-mock-btn');
+        if (openMockFromEmpty) {
+            openMockFromEmpty.onclick = () => {
+                const mockDrawer = modal.querySelector('#pi-mock-drawer');
+                if (mockDrawer) {
+                    mockDrawer.style.display = 'flex';
+                    modal.querySelector('#pi-mock-reply-input')?.focus();
+                }
+            };
+        }
+        const closeFromEmpty = contentBox.querySelector('#pi-empty-close-btn');
+        if (closeFromEmpty) {
+            closeFromEmpty.onclick = () => {
+                modal.classList.remove('pi-open');
+            };
+        }
+        return;
+    }
 
     let textToCopy = '';
 
@@ -763,12 +836,272 @@ function escapeHtml(text) {
 function updateStatusDisplay() {
     const indicator = document.getElementById('pi-status-indicator');
     const settings = getSettings();
-    if (indicator && currentSnapshot) {
-        const blockStatus = settings.blockSend 
-            ? '<span style="color:#ef4444; font-weight:bold;">[🛑截留阻断生效中]</span>' 
-            : '<span style="color:#40c057">[透视放行]</span>';
-        indicator.innerHTML = `${blockStatus} 最新: <strong>${currentSnapshot.timestamp}</strong> [${currentSnapshot.model}] (${currentSnapshot.messages?.length || 1} 层)`;
+    const btn = document.getElementById('pi-chat-quick-btn');
+
+    if (btn) {
+        if (settings.blockSend) {
+            btn.classList.add('is-blocking');
+        } else {
+            btn.classList.remove('is-blocking');
+        }
     }
+
+    if (indicator) {
+        if (currentSnapshot) {
+            const blockStatus = settings.blockSend 
+                ? '<span style="color:#ef4444; font-weight:bold;">[🛑截留阻断生效中]</span>' 
+                : '<span style="color:#40c057">[透视放行]</span>';
+            indicator.innerHTML = `${blockStatus} 最新: <strong>${currentSnapshot.timestamp}</strong> [${currentSnapshot.model}] (${currentSnapshot.messages?.length || 1} 层)`;
+        } else {
+            indicator.innerHTML = settings.blockSend
+                ? '<span style="color:#ef4444; font-weight:bold;">● 截留阻断已就绪</span> (发一条消息测试拦截)'
+                : '<span style="color:#40c057">● 透视放行已就绪</span> (发一条消息测试透视)';
+        }
+    }
+}
+
+let justDragged = false;
+
+/**
+ * 悬浮球手势拖拽与位置持久化
+ */
+function initQuickButtonInteraction(btn) {
+    if (!btn) return;
+
+    // 读取并恢复历史保存的坐标
+    try {
+        const savedPosStr = localStorage.getItem('st_pi_floating_pos');
+        if (savedPosStr) {
+            const savedPos = JSON.parse(savedPosStr);
+            if (typeof savedPos.x === 'number' && typeof savedPos.y === 'number') {
+                const maxX = Math.max(10, window.innerWidth - 70);
+                const maxY = Math.max(10, window.innerHeight - 70);
+                const clampedX = Math.min(Math.max(10, savedPos.x), maxX);
+                const clampedY = Math.min(Math.max(10, savedPos.y), maxY);
+                btn.style.left = `${clampedX}px`;
+                btn.style.top = `${clampedY}px`;
+                btn.style.right = 'auto';
+                btn.style.bottom = 'auto';
+            }
+        }
+    } catch (e) {
+        console.warn(`[${MODULE_NAME}] 读取悬浮球坐标失败:`, e);
+    }
+
+    let isPointerDown = false;
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let initialLeft = 0;
+    let initialTop = 0;
+
+    const onPointerDown = (e) => {
+        if (e.button !== undefined && e.button !== 0) return;
+        isPointerDown = true;
+        isDragging = false;
+        justDragged = false;
+        startX = e.clientX || (e.touches && e.touches[0]?.clientX) || 0;
+        startY = e.clientY || (e.touches && e.touches[0]?.clientY) || 0;
+
+        const rect = btn.getBoundingClientRect();
+        initialLeft = rect.left;
+        initialTop = rect.top;
+
+        if (btn.setPointerCapture && e.pointerId) {
+            try { btn.setPointerCapture(e.pointerId); } catch (_) {}
+        }
+    };
+
+    const onPointerMove = (e) => {
+        if (!isPointerDown) return;
+        const curX = e.clientX || (e.touches && e.touches[0]?.clientX) || 0;
+        const curY = e.clientY || (e.touches && e.touches[0]?.clientY) || 0;
+        const dx = curX - startX;
+        const dy = curY - startY;
+
+        if (!isDragging && Math.hypot(dx, dy) > 6) {
+            isDragging = true;
+            justDragged = true;
+        }
+
+        if (isDragging) {
+            if (e.cancelable) e.preventDefault();
+            e.stopPropagation();
+
+            const maxX = Math.max(10, window.innerWidth - btn.offsetWidth - 10);
+            const maxY = Math.max(10, window.innerHeight - btn.offsetHeight - 10);
+            const newX = Math.min(Math.max(10, initialLeft + dx), maxX);
+            const newY = Math.min(Math.max(10, initialTop + dy), maxY);
+
+            btn.style.left = `${newX}px`;
+            btn.style.top = `${newY}px`;
+            btn.style.right = 'auto';
+            btn.style.bottom = 'auto';
+        }
+    };
+
+    const onPointerUp = (e) => {
+        if (!isPointerDown) return;
+        isPointerDown = false;
+
+        if (isDragging) {
+            justDragged = true;
+            setTimeout(() => { justDragged = false; }, 250);
+
+            try {
+                localStorage.setItem('st_pi_floating_pos', JSON.stringify({
+                    x: btn.offsetLeft,
+                    y: btn.offsetTop,
+                }));
+            } catch (_) {}
+        }
+    };
+
+    btn.addEventListener('pointerdown', onPointerDown, { passive: true });
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp, { passive: true });
+    window.addEventListener('pointercancel', onPointerUp, { passive: true });
+
+    // 移动端 Touch 事件增强兼容
+    btn.addEventListener('touchstart', onPointerDown, { passive: true });
+    window.addEventListener('touchmove', onPointerMove, { passive: false });
+    window.addEventListener('touchend', onPointerUp, { passive: true });
+}
+
+export function resetQuickButtonPosition() {
+    try {
+        localStorage.removeItem('st_pi_floating_pos');
+    } catch (_) {}
+
+    const btn = document.getElementById('pi-chat-quick-btn');
+    if (btn) {
+        btn.style.left = 'auto';
+        btn.style.top = '240px';
+        btn.style.right = '14px';
+        btn.style.bottom = 'auto';
+    }
+
+    if (typeof toastr !== 'undefined') {
+        toastr.success('🎯 悬浮球已重置到屏幕右上侧安全可视区域！', '提示词截留器');
+    }
+}
+
+function toggleQuickButton(show) {
+    let btn = document.getElementById('pi-chat-quick-btn');
+    if (!show) {
+        if (btn) btn.remove();
+        return;
+    }
+
+    const settings = getSettings();
+
+    if (!btn) {
+        btn = document.createElement('div');
+        btn.id = 'pi-chat-quick-btn';
+        btn.className = 'pi-floating-badge' + (settings.blockSend ? ' is-blocking' : '');
+        btn.title = '点击查看当前截获的发往 AI 的完整提示词 (支持手势拖拽)';
+        btn.innerHTML = `<i class="fa-solid fa-satellite-dish"></i><span>提示词截留</span>`;
+        btn.onclick = (e) => {
+            if (justDragged) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            openPromptViewerModal();
+        };
+        initQuickButtonInteraction(btn);
+        document.body.appendChild(btn);
+    } else {
+        if (settings.blockSend) {
+            btn.classList.add('is-blocking');
+        } else {
+            btn.classList.remove('is-blocking');
+        }
+    }
+}
+
+/**
+ * 嵌入酒馆顶部/魔棒扩展菜单，确保移动端随时有一键直达入口
+ */
+function injectExtensionMenuItem() {
+    if (document.getElementById('pi-ext-menu-item')) return;
+    const extensionsMenu = document.getElementById('extensionsMenu');
+    if (!extensionsMenu) {
+        setTimeout(injectExtensionMenuItem, 1500);
+        return;
+    }
+
+    const menuItem = document.createElement('div');
+    menuItem.id = 'pi-ext-menu-item';
+    menuItem.className = 'list-group-item flex-container flexGap5 interactable';
+    menuItem.title = '打开提示词截留透视器';
+    menuItem.style.cursor = 'pointer';
+    menuItem.innerHTML = `
+        <i class="fa-solid fa-satellite-dish" style="color:#ef4444; width:18px; text-align:center;"></i>
+        <span>提示词截留透视</span>
+    `;
+    menuItem.onclick = () => openPromptViewerModal();
+    extensionsMenu.appendChild(menuItem);
+}
+
+function getFallbackSettingsHtml() {
+    return `
+    <div class="st-prompt-interceptor-settings">
+        <div class="inline-drawer">
+            <div class="inline-drawer-toggle inline-drawer-header">
+                <b><i class="fa-solid fa-satellite-dish" style="color: #ef4444; margin-right: 6px;"></i> 最终提示词截留透视器 (Prompt Interceptor)</b>
+                <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+            </div>
+            <div class="inline-drawer-content">
+                <p class="notes" style="margin-bottom: 12px; font-size: 0.85em; opacity: 0.85;">
+                    在酒馆经历预设组装、世界书匹配激活、向量记忆召回及历史裁剪后，直接截留并阻止最终发往大模型（Claude、DeepSeek、GPT等）的网络请求。
+                </p>
+                <div class="pi-settings-actions" style="margin-bottom: 14px; display: flex; flex-direction: column; gap: 8px;">
+                    <button id="pi_btn_open_viewer" class="menu_button" style="width: 100%; justify-content: center; font-weight: bold; background: linear-gradient(135deg, #991b1b, #dc2626); color: #fff; border: 1px solid #ef4444;">
+                        <i class="fa-solid fa-satellite-dish" style="margin-right: 6px;"></i> 打开截留透视全功能面板
+                    </button>
+                    <button id="pi_btn_reset_position" class="menu_button" style="width: 100%; justify-content: center; font-weight: bold; background: #1e293b; color: #e2e8f0; border: 1px solid #475569;">
+                        <i class="fa-solid fa-arrows-to-dot" style="margin-right: 6px;"></i> 🎯 悬浮球重置到屏幕安全位置
+                    </button>
+                    <button id="pi_btn_quick_mock" class="menu_button" style="width: 100%; justify-content: center; font-weight: bold; background: linear-gradient(135deg, #059669, #10b981); color: #fff; border: 1px solid #34d399;">
+                        <i class="fa-solid fa-masks-theater" style="margin-right: 6px;"></i> 🎭 伪装注入 AI 最新回复 (触发各插件)
+                    </button>
+                    <div id="pi-status-indicator" class="notes" style="font-size: 0.82em; color: #94a3b8; padding-left: 2px;">
+                        ● 尚未捕获发包（发送一条消息测试拦截）
+                    </div>
+                </div>
+                <hr style="border: 0; border-top: 1px solid var(--SmartThemeBorderColor, #3a3a4c); margin: 12px 0;">
+                <div class="pi-setting-item" style="margin-bottom: 12px; background: rgba(239, 68, 68, 0.12); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.3);">
+                    <label class="checkbox_label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="pi_setting_block_send">
+                        <span style="color: #fca5a5; font-weight: bold;">🛑 开启发包截留阻断 (开启后消息无法发给 AI，直接被插件截住)</span>
+                    </label>
+                    <div class="notes" style="margin-top: 4px; font-size: 0.78em; color: #cbd5e1; padding-left: 24px;">
+                        勾选后，点击发送消息将在发包前一瞬间被插件掐断，AI 收不到任何内容，零 Token 消耗，并自动弹窗展示截留报文。
+                    </div>
+                </div>
+                <div class="pi-setting-item" style="margin-bottom: 10px;">
+                    <label class="checkbox_label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="pi_setting_enabled">
+                        <span>启用插件</span>
+                    </label>
+                </div>
+                <div class="pi-setting-item" style="margin-bottom: 10px;">
+                    <label class="checkbox_label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="pi_setting_console">
+                        <span>在浏览器 F12 控制台展开打印完整 Payload 报文</span>
+                    </label>
+                </div>
+                <div class="pi-setting-item" style="margin-bottom: 10px;">
+                    <label class="checkbox_label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="pi_setting_quick_btn">
+                        <span>在屏幕上显示常驻可拖拽悬浮球 (透视入口)</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
 }
 
 /**
@@ -777,16 +1110,28 @@ function updateStatusDisplay() {
 async function initUI() {
     try {
         const settings = getSettings();
-        const html = await $.get(`/scripts/extensions/third-party/${MODULE_NAME}/settings.html`);
-        $('#extensions_settings').append(html);
+        let html = '';
+        try {
+            html = await $.get(`/scripts/extensions/third-party/${MODULE_NAME}/settings.html`);
+        } catch (_) {
+            try {
+                html = await $.get(`scripts/extensions/third-party/${MODULE_NAME}/settings.html`);
+            } catch (__) {
+                html = getFallbackSettingsHtml();
+            }
+        }
 
-        $('#pi_setting_enabled').prop('checked', settings.enabled).on('change', function () {
+        if (!document.querySelector('.st-prompt-interceptor-settings')) {
+            $('#extensions_settings').append(html);
+        }
+
+        $('#pi_setting_enabled').prop('checked', settings.enabled).off('change').on('change', function () {
             settings.enabled = $(this).prop('checked');
             saveSettings();
             updateStatusDisplay();
         });
 
-        $('#pi_setting_block_send').prop('checked', settings.blockSend).on('change', function () {
+        $('#pi_setting_block_send').prop('checked', settings.blockSend).off('change').on('change', function () {
             settings.blockSend = $(this).prop('checked');
             saveSettings();
             updateStatusDisplay();
@@ -799,48 +1144,36 @@ async function initUI() {
             }
         });
 
-        $('#pi_setting_console').prop('checked', settings.logToConsole).on('change', function () {
+        $('#pi_setting_console').prop('checked', settings.logToConsole).off('change').on('change', function () {
             settings.logToConsole = $(this).prop('checked');
             saveSettings();
         });
 
-        $('#pi_setting_quick_btn').prop('checked', settings.showQuickButton).on('change', function () {
+        $('#pi_setting_quick_btn').prop('checked', settings.showQuickButton).off('change').on('change', function () {
             settings.showQuickButton = $(this).prop('checked');
             saveSettings();
             toggleQuickButton(settings.showQuickButton);
         });
 
-        $('#pi_btn_open_viewer').on('click', () => openPromptViewerModal());
-        $('#pi_btn_quick_mock').on('click', () => openPromptViewerModal(null, true));
+        $('#pi_btn_open_viewer').off('click').on('click', () => openPromptViewerModal());
+        $('#pi_btn_reset_position').off('click').on('click', () => resetQuickButtonPosition());
+        $('#pi_btn_quick_mock').off('click').on('click', () => openPromptViewerModal(null, true));
 
         toggleQuickButton(settings.showQuickButton);
+        injectExtensionMenuItem();
         updateStatusDisplay();
     } catch (err) {
         console.error(`[${MODULE_NAME}] 加载设置界面失败:`, err);
     }
 }
 
-function toggleQuickButton(show) {
-    let btn = document.getElementById('pi-chat-quick-btn');
-    if (!show) {
-        if (btn) btn.remove();
-        return;
-    }
-
-    if (!btn) {
-        btn = document.createElement('div');
-        btn.id = 'pi-chat-quick-btn';
-        btn.className = 'pi-floating-badge';
-        btn.title = '点击查看当前截获的发往 AI 的完整提示词 (Prompt Interceptor)';
-        btn.innerHTML = `<i class="fa-solid fa-satellite-dish"></i><span>提示词截留</span>`;
-        btn.onclick = () => openPromptViewerModal();
-        document.body.appendChild(btn);
-    }
-}
-
 jQuery(async () => {
     installFetchGuard();
     registerPromptInterceptor();
+    // 立即初始化悬浮球与扩展菜单，保障移动端即时可用
+    const settings = getSettings();
+    toggleQuickButton(settings.showQuickButton);
+    injectExtensionMenuItem();
     await initUI();
-    console.log(`[${MODULE_NAME}] 插件已成功初始化，伪装注入 AI 回复功能已就绪。`);
+    console.log(`[${MODULE_NAME}] 插件已成功初始化 (v1.1.0)，手势拖拽悬浮球与移动端透视就绪。`);
 });
