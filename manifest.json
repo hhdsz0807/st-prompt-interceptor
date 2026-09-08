@@ -1,0 +1,12 @@
+{
+  "name": "st-prompt-interceptor",
+  "display_name": "🎯 最终提示词截留透视器 (Prompt Interceptor)",
+  "version": "1.0.0",
+  "author": "hhdsz0807",
+  "description": "在预设、世界书、记忆召回全部拼接完成后，截留并透视最终发给 AI 的完整提示词与网络请求参数；支持硬拦截阻断与伪装注入 AI 最新回复以激活下游插件。",
+  "home_page": "https://github.com/hhdsz0807/st-prompt-interceptor",
+  "js": "index.js",
+  "css": "style.css",
+  "icon": "fa-solid fa-satellite-dish",
+  "requires": []
+}

@@ -1,0 +1,58 @@
+<div class="st-prompt-interceptor-settings">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b><i class="fa-solid fa-satellite-dish" style="color: #ef4444; margin-right: 6px;"></i> 最终提示词截留透视器 (Prompt Interceptor)</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+            <p class="notes" style="margin-bottom: 12px; font-size: 0.85em; opacity: 0.85;">
+                在酒馆经历预设组装、世界书匹配激活、向量记忆召回及历史裁剪后，直接截留并阻止最终发往大模型（Claude、DeepSeek、GPT等）的网络请求。
+            </p>
+            
+            <div class="pi-settings-actions" style="margin-bottom: 14px; display: flex; flex-direction: column; gap: 8px;">
+                <button id="pi_btn_open_viewer" class="menu_button" style="width: 100%; justify-content: center; font-weight: bold; background: linear-gradient(135deg, #991b1b, #dc2626); color: #fff; border: 1px solid #ef4444;">
+                    <i class="fa-solid fa-satellite-dish" style="margin-right: 6px;"></i> 查看被截留的完整提示词面板
+                </button>
+                <button id="pi_btn_quick_mock" class="menu_button" style="width: 100%; justify-content: center; font-weight: bold; background: linear-gradient(135deg, #059669, #10b981); color: #fff; border: 1px solid #34d399;">
+                    <i class="fa-solid fa-masks-theater" style="margin-right: 6px;"></i> 🎭 伪装注入 AI 最新回复 (触发各插件)
+                </button>
+                <div id="pi-status-indicator" class="notes" style="font-size: 0.82em; color: #94a3b8; padding-left: 2px;">
+                    ● 尚未捕获发包（发送一条消息测试拦截）
+                </div>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--SmartThemeBorderColor, #3a3a4c); margin: 12px 0;">
+
+            <div class="pi-setting-item" style="margin-bottom: 12px; background: rgba(239, 68, 68, 0.12); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.3);">
+                <label class="checkbox_label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="pi_setting_block_send">
+                    <span style="color: #fca5a5; font-weight: bold;">🛑 开启发包截留阻断 (开启后消息无法发给 AI，直接被插件截住)</span>
+                </label>
+                <div class="notes" style="margin-top: 4px; font-size: 0.78em; color: #cbd5e1; padding-left: 24px;">
+                    勾选后，点击发送消息将在发包前一瞬间被插件掐断，AI 收不到任何内容，零 Token 消耗，并自动弹窗展示截留报文。
+                </div>
+            </div>
+
+            <div class="pi-setting-item" style="margin-bottom: 10px;">
+                <label class="checkbox_label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="pi_setting_enabled">
+                    <span>启用插件</span>
+                </label>
+            </div>
+
+            <div class="pi-setting-item" style="margin-bottom: 10px;">
+                <label class="checkbox_label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="pi_setting_console">
+                    <span>在浏览器 F12 控制台展开打印完整 Payload 报文</span>
+                </label>
+            </div>
+
+            <div class="pi-setting-item" style="margin-bottom: 10px;">
+                <label class="checkbox_label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="pi_setting_quick_btn">
+                    <span>在界面右下角显示便捷浮动查看按钮</span>
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
