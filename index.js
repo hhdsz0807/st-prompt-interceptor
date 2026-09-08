@@ -288,6 +288,94 @@ function recordSnapshot(snap) {
 }
 
 /**
+ * 全平台高兼容剪贴板写入工具 (强力支持移动端 HTTP 局域网访问、非安全上下文、iOS Safari)
+ */
+export async function copyToClipboard(text) {
+    if (typeof text !== 'string') {
+        text = String(text || '');
+    }
+
+    if (!text) {
+        throw new Error('复制内容为空');
+    }
+
+    // 1. 优先尝试现代 W3C Clipboard API (仅在 Secure Context 如 HTTPS 或 localhost 下可用)
+    if (window.isSecureContext && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch (err) {
+            console.warn(`[${MODULE_NAME}] navigator.clipboard 写入被拦截，降级到 textarea 选区复制:`, err);
+        }
+    }
+
+    // 2. 降级方案：创建不可见 textarea + document.execCommand('copy')
+    // 兼容所有非 HTTPS 移动端 (如 http://192.168.x.x:8000)、内嵌 Webview 及传统浏览器
+    let textarea = null;
+    try {
+        textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.top = '0';
+        textarea.style.left = '-9999px';
+        textarea.style.width = '2em';
+        textarea.style.height = '2em';
+        textarea.style.padding = '0';
+        textarea.style.border = 'none';
+        textarea.style.outline = 'none';
+        textarea.style.boxShadow = 'none';
+        textarea.style.background = 'transparent';
+        textarea.setAttribute('readonly', '');
+
+        document.body.appendChild(textarea);
+
+        // iOS Safari 选区特殊兼容
+        if (/ipad|iphone|ipod/i.test(navigator.userAgent)) {
+            const range = document.createRange();
+            range.selectNodeContents(textarea);
+            const selection = window.getSelection();
+            if (selection) {
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+            textarea.setSelectionRange(0, 999999);
+        } else {
+            textarea.focus();
+            textarea.select();
+        }
+
+        const successful = document.execCommand('copy');
+        if (!successful) {
+            throw new Error('execCommand copy returned false');
+        }
+        return true;
+    } catch (fallbackErr) {
+        console.error(`[${MODULE_NAME}] 所有剪贴板复制方案均失败:`, fallbackErr);
+        throw fallbackErr;
+    } finally {
+        if (textarea && textarea.parentNode) {
+            document.body.removeChild(textarea);
+        }
+    }
+}
+
+/**
+ * 按钮即时高亮成功反馈（在移动端直接反馈，防止提示条被遮挡）
+ */
+function showButtonSuccess(btn, successText = '已复制!') {
+    if (!btn) return;
+    const origHtml = btn.innerHTML;
+    btn.innerHTML = `<i class="fa-solid fa-check" style="color:#4ade80;"></i> ${successText}`;
+    btn.style.filter = 'brightness(1.2)';
+    btn.style.borderColor = '#4ade80';
+    setTimeout(() => {
+        btn.innerHTML = origHtml;
+        btn.style.filter = '';
+        btn.style.borderColor = '';
+    }, 1600);
+}
+
+/**
  * 弹出全量透视模态面板
  */
 export function openPromptViewerModal(selectedSnapId = null, openWithMockDrawer = false) {
@@ -480,19 +568,26 @@ export function openPromptViewerModal(selectedSnapId = null, openWithMockDrawer 
         };
     }
 
-    // 粘贴剪贴板
+    // 粘贴剪贴板 (增加 HTTP / 移动端非安全上下文容错与指引)
     const pasteBtn = modal.querySelector('#pi-paste-clipboard-btn');
     const mockInput = modal.querySelector('#pi-mock-reply-input');
     if (pasteBtn && mockInput) {
         pasteBtn.onclick = async () => {
-            try {
-                const text = await navigator.clipboard.readText();
-                if (text) {
-                    mockInput.value = text;
-                    if (typeof toastr !== 'undefined') toastr.info('已从剪贴板粘贴文本！');
+            if (window.isSecureContext && navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+                try {
+                    const text = await navigator.clipboard.readText();
+                    if (text) {
+                        mockInput.value = text;
+                        if (typeof toastr !== 'undefined') toastr.success('已从剪贴板粘贴文本！');
+                        return;
+                    }
+                } catch (err) {
+                    console.warn(`[${MODULE_NAME}] 读取剪贴板受限:`, err);
                 }
-            } catch (err) {
-                if (typeof toastr !== 'undefined') toastr.warning('无法自动读取剪贴板，请手动粘贴。');
+            }
+            mockInput.focus();
+            if (typeof toastr !== 'undefined') {
+                toastr.info('浏览器在非 HTTPS/局域网环境下限制自动读取剪贴板，请长按输入框直接选择“粘贴”。');
             }
         };
     }
@@ -538,13 +633,35 @@ export function openPromptViewerModal(selectedSnapId = null, openWithMockDrawer 
         };
     }
 
-    // 复制完整 JSON
-    modal.querySelector('#pi-copy-all-json').onclick = () => {
-        const payloadToCopy = snap.fullPayload || snap.messages;
-        navigator.clipboard.writeText(JSON.stringify(payloadToCopy, null, 2)).then(() => {
-            if (typeof toastr !== 'undefined') toastr.success('已复制完整 Payload JSON 到剪贴板！');
-        });
-    };
+    // 复制完整 JSON (支持移动端 HTTP / 局域网及按钮即时视觉反馈)
+    const copyJsonBtn = modal.querySelector('#pi-copy-all-json');
+    if (copyJsonBtn) {
+        copyJsonBtn.onclick = async () => {
+            if (snap.isEmptyPlaceholder) {
+                if (typeof toastr !== 'undefined') {
+                    toastr.info('当前尚未发送消息产生提示词，请在聊天输入框发送一条消息后再复制。', '提示词截留器');
+                } else {
+                    alert('当前尚未发送消息产生提示词，请在聊天输入框发送一条消息后再复制。');
+                }
+                return;
+            }
+
+            const payloadToCopy = snap.fullPayload || snap.messages;
+            const jsonStr = JSON.stringify(payloadToCopy, null, 2);
+            try {
+                await copyToClipboard(jsonStr);
+                showButtonSuccess(copyJsonBtn, '已复制 JSON!');
+                if (typeof toastr !== 'undefined') {
+                    toastr.success('✅ 已成功复制完整 Payload JSON 到剪贴板！', '提示词截留器');
+                }
+            } catch (err) {
+                console.error(`[${MODULE_NAME}] 复制 JSON 失败:`, err);
+                if (typeof toastr !== 'undefined') {
+                    toastr.warning('复制失败，请尝试在正文区域长按选中文本复制。', '提示词截留器');
+                }
+            }
+        };
+    }
 
     // 搜索高亮
     const searchInput = modal.querySelector('#pi-search-input');
@@ -735,6 +852,17 @@ function updateReadingView(modal, snap, isChat) {
                 modal.classList.remove('pi-open');
             };
         }
+
+        // 即使未发包，点击复制也给予明确友好提示，绝不静默无反应
+        if (copyBtn) {
+            copyBtn.onclick = () => {
+                if (typeof toastr !== 'undefined') {
+                    toastr.info('当前尚未捕获到发往 AI 的提示词，请在聊天框发送一条消息后再复制。', '提示词截留器');
+                } else {
+                    alert('当前尚未捕获到发往 AI 的提示词，请在聊天框发送一条消息后再复制。');
+                }
+            };
+        }
         return;
     }
 
@@ -811,10 +939,26 @@ function updateReadingView(modal, snap, isChat) {
     }
 
     if (copyBtn) {
-        copyBtn.onclick = () => {
-            navigator.clipboard.writeText(textToCopy).then(() => {
-                if (typeof toastr !== 'undefined') toastr.success('已复制当前显示的提示词内容到剪贴板！');
-            });
+        copyBtn.onclick = async () => {
+            if (!textToCopy || !textToCopy.trim()) {
+                if (typeof toastr !== 'undefined') {
+                    toastr.warning('当前查看的页面没有可复制的文本内容。', '提示词截留器');
+                }
+                return;
+            }
+
+            try {
+                await copyToClipboard(textToCopy);
+                showButtonSuccess(copyBtn, '已复制正文!');
+                if (typeof toastr !== 'undefined') {
+                    toastr.success('✅ 已成功复制当前显示的提示词正文！', '提示词截留器');
+                }
+            } catch (err) {
+                console.error(`[${MODULE_NAME}] 复制当前视图正文失败:`, err);
+                if (typeof toastr !== 'undefined') {
+                    toastr.warning('写入剪贴板受限，请在正文区域长按选中文本复制。', '提示词截留器');
+                }
+            }
         };
     }
 }
